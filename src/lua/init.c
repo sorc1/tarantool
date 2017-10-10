@@ -58,6 +58,7 @@
 #include "lua/fio.h"
 #include "lua/httpc.h"
 #include "digest.h"
+#include "error.h"
 #include <small/ibuf.h>
 
 #include <ctype.h>

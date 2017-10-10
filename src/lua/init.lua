@@ -5,6 +5,7 @@ ffi.cdef[[
 struct type_info;
 struct method_info;
 struct error;
+struct frame;
 
 enum ctype {
     CTYPE_VOID = 0,
@@ -20,10 +21,21 @@ struct type_info {
 
 enum {
     DIAG_ERRMSG_MAX = 512,
-    DIAG_FILENAME_MAX = 256
+    DIAG_FILENAME_MAX = 256,
+    DIAG_MAX_TRACEBACK = 32
+};
+
+struct frame {
+	int _line;
+	char _filename[DIAG_FILENAME_MAX];
 };
 
 typedef void (*error_f)(struct error *e);
+
+struct rlist {
+	struct rlist *prev;
+	struct rlist *next;
+};
 
 struct error {
     error_f _destroy;
@@ -37,6 +49,9 @@ struct error {
     char _file[DIAG_FILENAME_MAX];
     /* Error description. */
     char _errmsg[DIAG_ERRMSG_MAX];
+    /** Error traceback */
+    struct rlist _frames;
+    int _frames_count;
 };
 
 enum { METHOD_ARG_MAX = 8 };
@@ -67,6 +82,7 @@ pid_t getpid(void);
 ]]
 
 local fio = require("fio")
+local utils = require('utils')
 
 local REFLECTION_CACHE = {}
 
@@ -110,18 +126,17 @@ local function error_type(err)
     return ffi.string(err._type.name)
 end
 
+local function error_trace(err)
+    if err.depth_traceback == 0 then
+        return {}
+    end
+    return utils.get_traceback(err)
+end
+
 local function error_message(err)
     return ffi.string(err._errmsg)
 end
 
-local function error_trace(err)
-    if err._file[0] == 0 then
-        return {}
-    end
-    return {
-        { file = ffi.string(err._file), line = tonumber(err._line) };
-    }
-end
 
 local error_fields = {
     ["type"]        = error_type;
@@ -332,6 +347,8 @@ local function search(name)
     end
     return nil
 end
+
+_G.pcall = utils.pcall
 
 -- loader_preload 1
 table.insert(package.loaders, 2, cwd_loader_func(false))

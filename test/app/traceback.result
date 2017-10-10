@@ -1,0 +1,15 @@
+s, err = pcall(box.error, 1, "err")
+---
+...
+err.trace[1].file
+---
+- builtin/socket.lua
+...
+err.trace[1].line
+---
+- 997
+...
+#err.trace
+---
+- 9
+...
