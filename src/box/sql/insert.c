@@ -477,6 +477,16 @@ sqlite3Insert(Parse * pParse,	/* Parser context */
 				pParse->checkSchema = 1;
 				goto insert_cleanup;
 			}
+			for (j = 0; j < i; j++) {
+				if (pColumn->a[j].idx != pColumn->a[i].idx)
+					continue;
+				const char *err;
+				err = "table id list: duplicate column name %s";
+				sqlite3ErrorMsg(pParse,
+						err,
+						pColumn->a[i].zName);
+				goto insert_cleanup;
+			}
 		}
 	}
 
