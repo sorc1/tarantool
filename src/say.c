@@ -853,7 +853,7 @@ say_default(int level, const char *filename, int line, const char *error,
 			     line, error, format, ap);
 	if (level == S_FATAL && log_default->fd != STDERR_FILENO) {
 		ssize_t r = write(STDERR_FILENO, buf, total);
-		(void) r;                       /* silence gcc warning */
+		(void) r; /* silence gcc warning */
 	}
 
 	va_end(ap);
@@ -1040,8 +1040,10 @@ log_vsay(struct log *log, int level, const char *filename, int line,
 		break;
 	case SAY_LOGGER_SYSLOG:
 		write_to_syslog(log, total);
-		if (level == S_FATAL && log->fd != STDERR_FILENO)
-			(void) write(STDERR_FILENO, buf, total);
+		if (level == S_FATAL && log->fd != STDERR_FILENO) {
+			ssize_t r = write(STDERR_FILENO, buf, total);
+			(void) r;                       /* silence gcc warning */
+		}
 		break;
 	case SAY_LOGGER_BOOT:
 	{

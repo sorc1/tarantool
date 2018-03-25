@@ -257,6 +257,12 @@ macro(enable_tnt_compile_flags)
         AND HAVE_STD_C11 AND HAVE_STD_CXX11)
         add_compile_flags("C;CXX" "-Werror")
     endif()
+
+    if ((${CMAKE_BUILD_TYPE} STREQUAL "TroubleRelease")
+        AND HAVE_STD_C11 AND HAVE_STD_CXX11)
+        add_compile_flags("C;CXX" "-Werror")
+        message("Trouble Release")
+    endif()
 endmacro(enable_tnt_compile_flags)
 
 if (HAVE_OPENMP)

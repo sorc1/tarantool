@@ -301,6 +301,7 @@ iproto_reply_vclock(struct obuf *out, uint64_t sync, uint32_t schema_version,
 			     size - IPROTO_HEADER_LEN);
 
 	char *ptr = obuf_alloc(out, size);
+	(void) ptr;
 	assert(ptr == buf);
 	return 0;
 }
@@ -339,9 +340,13 @@ iproto_write_error(int fd, const struct error *e, uint32_t schema_version,
 			     schema_version, sizeof(body) + msg_len);
 
 	body.v_data_len = mp_bswap_u32(msg_len);
-	(void) write(fd, header, sizeof(header));
-	(void) write(fd, &body, sizeof(body));
-	(void) write(fd, e->errmsg, msg_len);
+	ssize_t r1, r2, r3;
+	r1 = write(fd, header, sizeof(header));
+	r2 = write(fd, &body, sizeof(body));
+	r3 = write(fd, e->errmsg, msg_len);
+	(void) r1;
+	(void) r2;
+	(void) r3;
 }
 
 int

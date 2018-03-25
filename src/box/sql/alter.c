@@ -157,6 +157,7 @@ sqlite3AlterFinishAddColumn(Parse * pParse, Token * pColDef)
 	if (pParse->nErr || db->mallocFailed)
 		return;
 	assert(v != 0);
+	(void) v;
 	pNew = pParse->pNewTable;
 	assert(pNew);
 

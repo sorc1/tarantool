@@ -257,7 +257,6 @@ sqlite3Pragma(Parse * pParse, Token * pId,	/* First part of [schema.]id field */
 	char *zLeft = 0;	/* Nul-terminated UTF-8 string <id> */
 	char *zRight = 0;	/* Nul-terminated UTF-8 string <value>, or NULL */
 	char *zTable = 0;	/* Nul-terminated UTF-8 string <value2> or NULL */
-	int rc;			/* return value form SQLITE_FCNTL_PRAGMA */
 	sqlite3 *db = pParse->db;	/* The database connection */
 	Vdbe *v = sqlite3GetVdbe(pParse);	/* Prepared statement */
 	const PragmaName *pPragma;	/* The pragma */
@@ -521,8 +520,9 @@ sqlite3Pragma(Parse * pParse, Token * pId,	/* First part of [schema.]id field */
 		box_tuple_t *tuple;
 		box_iterator_t* iter;
 		iter = box_index_iterator(space_id, 0,ITER_ALL, key_buf, key_end);
-		rc = box_iterator_next(iter, &tuple);
+		int rc = box_iterator_next(iter, &tuple);
 		assert(rc==0);
+		(void) rc;
 		for (i = 0; tuple!=NULL; i++, box_iterator_next(iter, &tuple)){
 			/* 1 is name field number */
 			const char *str = tuple_field_cstr(tuple, 1);
