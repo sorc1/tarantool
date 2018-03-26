@@ -371,7 +371,20 @@ vy_lsm_create(struct vy_lsm *lsm)
 	lsm->id = vy_log_next_id();
 
 	/* Allocate initial range. */
-	return vy_lsm_init_range_tree(lsm);
+	if (vy_lsm_init_range_tree(lsm) != 0)
+		return -1;
+
+	assert(lsm->range_count == 1);
+	struct vy_range *range = vy_range_tree_first(lsm->tree);
+
+	/* Write the new index to the metadata log. */
+	vy_log_tx_begin();
+	vy_log_prepare_lsm(lsm->id, lsm->space_id, lsm->index_id);
+	vy_log_insert_range(lsm->id, range->id, NULL, NULL);
+	if (vy_log_tx_commit() < 0)
+		return -1;
+
+	return 0;
 }
 
 static struct vy_run *
@@ -545,10 +558,10 @@ vy_lsm_recover(struct vy_lsm *lsm, struct vy_recovery *recovery,
 	lsm_info = vy_recovery_lsm_by_index_id(recovery,
 			lsm->space_id, lsm->index_id);
 	if (is_checkpoint_recovery) {
-		if (lsm_info == NULL) {
+		if (lsm_info == NULL || lsm_info->commit_lsn < 0) {
 			/*
 			 * All LSM trees created from snapshot rows must
-			 * be present in vylog, because snapshot can
+			 * be committed to vylog, because snapshot can
 			 * only succeed if vylog has been successfully
 			 * flushed.
 			 */
@@ -568,20 +581,34 @@ vy_lsm_recover(struct vy_lsm *lsm, struct vy_recovery *recovery,
 		}
 	}
 
-	if (lsm_info == NULL || lsn > lsm_info->commit_lsn) {
+	if (lsm_info == NULL || (lsm_info->commit_lsn >= 0 &&
+				 lsm_info->prepared == NULL &&
+				 lsn > lsm_info->commit_lsn)) {
 		/*
-		 * If we failed to log LSM tree creation before restart,
-		 * we won't find it in the log on recovery. This is OK as
+		 * Before VY_LOG_PREPARE_LSM record type was introduced,
+		 * we wrote a new index to vylog only after successful
+		 * WAL write. So if we can't find the index in vylog,
+		 * we failed to log it before restart. This is OK as
 		 * the LSM tree doesn't have any runs in this case. We will
 		 * retry to log LSM tree in vinyl_index_commit_create().
-		 * For now, just create the initial range and assign id.
+		 * For now, retry index creation.
 		 */
-		lsm->id = vy_log_next_id();
-		return vy_lsm_init_range_tree(lsm);
+		return vy_lsm_create(lsm);
+	}
+
+	if (lsm_info->commit_lsn >= 0 && lsn > lsm_info->commit_lsn) {
+		/*
+		 * The index we are recovering was prepared, successfully
+		 * built, and committed to WAL, but it was not committed
+		 * to vylog. Recover the prepared LSM tree. We will retry
+		 * to write it to vylog in vinyl_index_commit_create().
+		 */
+		lsm_info = lsm_info->prepared;
+		assert(lsm_info != NULL);
 	}
 
 	lsm->id = lsm_info->id;
-	lsm->is_committed = true;
+	lsm->is_committed = lsm_info->commit_lsn >= 0;
 
 	if (lsn < lsm_info->commit_lsn || lsm_info->is_dropped) {
 		/*
