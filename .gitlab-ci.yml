@@ -1,0 +1,27 @@
+stages:
+ - build
+ - test
+before_script:
+  - apt-get install -y build-essential cmake coreutils sed \
+      libreadline-dev libncurses5-dev libyaml-dev libssl-dev \
+      libcurl4-openssl-dev libunwind-dev libicu-dev \
+      python python-pip python-setuptools python-dev \
+      python-msgpack python-yaml python-argparse python-six python-gevent
+  - git submodule update --init --recursive
+build:precise:
+  stage: build
+  image: precise:base
+  script:
+    - make clean
+    - rm CMakeCache.txt
+    - cmake .
+    - make
+
+build:trusty:
+  stage: build
+  image: trusty:base
+  script:
+    - make clean
+    - rm CMakeCache.txt
+    - cmake .
+    - make
