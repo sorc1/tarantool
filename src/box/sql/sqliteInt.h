@@ -666,6 +666,27 @@ enum sql_type {
 	SQLITE_NULL = 5,
 };
 
+/**
+ * Structure for internal usage during INSERT/UPDATE
+ * statements compilation.
+ */
+struct on_conflict {
+	/**
+	 * Represents an error action in queries like
+	 * INSERT/UPDATE OR <override_error>, which
+	 * overrides all space constraints error actions.
+	 */
+	int override_error;
+	/**
+	 * Represents an ON CONFLICT action which can be
+	 * optimized and executed without VDBE bytecode, by
+	 * Tarantool only. If optimization is not available, then
+	 * the value is ON_CONFLICT_ACTION_NONE, otherwise it is
+	 * ON_CONFLICT_ACTON_IGNORE or ON_CONFLICT_ACTION_REPLACE.
+	 */
+	int optimized_on_conflict;
+};
+
 void *
 sqlite3_user_data(sqlite3_context *);
 
@@ -3709,8 +3730,10 @@ void sqlite3GenerateRowIndexDelete(Parse *, Table *, int, int);
 int sqlite3GenerateIndexKey(Parse *, Index *, int, int, int *, Index *, int);
 void sqlite3ResolvePartIdxLabel(Parse *, int);
 void sqlite3GenerateConstraintChecks(Parse *, Table *, int *, int, int, int,
-				     int, u8, u8, int, int *, int *);
-void sqlite3CompleteInsertion(Parse *, Table *, int, int *, int, u8);
+				     int, u8, struct on_conflict *, int,
+				     int *, int *);
+void sqlite3CompleteInsertion(Parse *, Table *, int, int *, int,
+			      struct on_conflict *);
 int sqlite3OpenTableAndIndices(Parse *, Table *, int, u8, int, u8 *, int *,
 			       int *, u8, u8);
 void sqlite3BeginWriteOperation(Parse *, int);

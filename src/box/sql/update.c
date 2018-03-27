@@ -563,11 +563,15 @@ sqlite3Update(Parse * pParse,		/* The parser context */
 		int addr1 = 0;	/* Address of jump instruction */
 		int bReplace = 0;	/* True if REPLACE conflict resolution might happen */
 
+		struct on_conflict on_conflict;
+		on_conflict.override_error = onError;
+		on_conflict.optimized_on_conflict = ON_CONFLICT_ACTION_NONE;
+
 		/* Do constraint checks. */
 		assert(regOldPk > 0);
 		sqlite3GenerateConstraintChecks(pParse, pTab, aRegIdx, iDataCur,
 						iIdxCur, regNewPk,
-						regOldPk, chngPk, onError,
+						regOldPk, chngPk, &on_conflict,
 						labelContinue, &bReplace,
 						aXRef);
 
@@ -616,7 +620,8 @@ sqlite3Update(Parse * pParse,		/* The parser context */
 		}
 
 		/* Insert the new index entries and the new record. */
-		sqlite3CompleteInsertion(pParse, pTab, iIdxCur, aRegIdx, 0, onError);
+		sqlite3CompleteInsertion(pParse, pTab, iIdxCur, aRegIdx, 0,
+					 &on_conflict);
 
 		/* Do any ON CASCADE, SET NULL or SET DEFAULT operations required to
 		 * handle rows (possibly in other tables) that refer via a foreign key
