@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <errinj.h>
 #include <coio_task.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 int
 parse_logger_type(const char *input)
@@ -41,7 +43,7 @@ parse_syslog_opts(const char *input)
 	if (opts.identity)
 		note("identity: %s", opts.identity);
 	if (opts.facility)
-		note("facility: %s", opts.facility);
+		note("facility: %i", opts.facility);
 	say_free_syslog_opts(&opts);
 	return 0;
 }
@@ -160,7 +162,7 @@ int main()
 	fiber_init(fiber_c_invoke);
 	say_logger_init("/dev/null", S_INFO, 0, "plain", 0);
 
-	plan(23);
+	plan(33);
 
 #define PARSE_LOGGER_TYPE(input, rc) \
 	ok(parse_logger_type(input) == rc, "%s", input)
@@ -185,7 +187,10 @@ int main()
 	PARSE_SYSLOG_OPTS("identity=tarantool", 0);
 	PARSE_SYSLOG_OPTS("facility=user", 0);
 	PARSE_SYSLOG_OPTS("identity=xtarantoolx,facility=local1", 0);
-	PARSE_SYSLOG_OPTS("facility=foo,identity=bar", 0);
+	PARSE_SYSLOG_OPTS("identity=xtarantoolx,facility=kern", 0);
+	PARSE_SYSLOG_OPTS("identity=xtarantoolx,facility=uucp", 0);
+	PARSE_SYSLOG_OPTS("identity=xtarantoolx,facility=foo", -1);
+	PARSE_SYSLOG_OPTS("facility=authpriv,identity=bar", 0);
 	PARSE_SYSLOG_OPTS("invalid=", -1);
 	PARSE_SYSLOG_OPTS("facility=local1,facility=local2", -1);
 	PARSE_SYSLOG_OPTS("identity=foo,identity=bar", -1);
@@ -206,7 +211,7 @@ int main()
 	log_set_format(&test_log, format_func_custom);
 	log_say(&test_log, 0, NULL, 0, NULL, "hello %s", "user");
 
-	FILE* fd = fopen(tmp_filename, "r");
+	FILE* fd = fopen(tmp_filename, "r+");
 	const size_t len = 4096;
 	char line[len];
 
@@ -233,7 +238,51 @@ int main()
 	}
 	fiber_wakeup(test);
 	ev_run(loop(), 0);
+	/**
+	* Create syslog UNIX socket if it doesn't exists.
+	*/
+	int sd = -1;
+	if (access("/dev/log", F_OK) == -1 && access("/var/run/syslog", F_OK) == -1) {
 
+		struct sockaddr_un address;
+		memset(&address, 0, sizeof(address));
+		address.sun_family = AF_UNIX;
+		snprintf(address.sun_path, sizeof(address.sun_path), "%s", "/dev/log");
+		int sd = socket(AF_UNIX, SOCK_DGRAM, 0);
+		if (sd < 0) {
+			fprintf(stderr, "bad socket");
+			return check_plan();
+		}
+		if (bind(sd, (struct sockaddr *)(&address),
+			 sizeof(address)) != 0) {
+			fprintf(stderr, "bind error: %s\n", strerror(errno));
+			return check_plan();
+		}
+	}
+
+	if (log_create(&test_log, "syslog:identity=tarantool,facility=local0", false) < 0) {
+		fprintf(stderr, "failed to create syslog: %s\n",
+			diag_last_error(&fiber()->diag)->errmsg);
+		return check_plan();
+	}
+	test_log.fd = fileno(fd);
+	/*
+	 * redirect stderr to /dev/null in order to filter
+	 * it out from result file.
+	 */
+	ok(freopen("/dev/null", "w", stderr) != NULL, "freopen");
+	ok(strncmp(test_log.syslog_ident, "tarantool", 9) == 0, "parsed identity");
+	ok(test_log.syslog_facility == SYSLOG_LOCAL0, "parsed facility");
+	long before = ftell(fd);
+	ok(before >= 0, "ftell");
+	ok(log_say(&test_log, 0, NULL, 0, NULL, "hello %s", "user") > 0, "log_say");
+	ok(fseek(fd, before, SEEK_SET) >= 0, "fseek");
+
+	if (fgets(line, len, fd) != NULL) {
+		ok(strstr(line, "<131>") != NULL, "syslog line");
+	}
+	close(sd);
+	log_destroy(&test_log);
 	fiber_free();
 	memory_free();
 	return check_plan();
