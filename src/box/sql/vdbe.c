@@ -4318,17 +4318,12 @@ case OP_Next:          /* jump */
 	goto check_for_interrupt;
 }
 
-/* Opcode: IdxInsert P1 P2 P3 P4 P5
+/* Opcode: IdxInsert P1 P2 * * P5
  * Synopsis: key=r[P2]
  *
  * Register P2 holds an SQL index key made using the
  * MakeRecord instructions.  This opcode writes that key
  * into the index P1.  Data for the entry is nil.
- *
- * If P4 is not zero, then it is the number of values in the unpacked
- * key of reg(P2).  In that case, P3 is the index of the first register
- * for the unpacked key.  The availability of the unpacked key can sometimes
- * be an optimization.
  *
  * If P5 has the OPFLAG_APPEND bit set, that is a hint to the b-tree layer
  * that this insert is likely to be an append.
@@ -4345,7 +4340,7 @@ case OP_Next:          /* jump */
  *
  * This instruction only works for indices.
  */
-/* Opcode: IdxReplace P1 P2 P3 P4 P5
+/* Opcode: IdxReplace P1 P2 * * P5
  * Synopsis: key=r[P2]
  *
  * This opcode works exactly as IdxInsert does, but in Tarantool

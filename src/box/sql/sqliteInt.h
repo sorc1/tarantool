@@ -3710,7 +3710,21 @@ int sqlite3GenerateIndexKey(Parse *, Index *, int, int, int *, Index *, int);
 void sqlite3ResolvePartIdxLabel(Parse *, int);
 void sqlite3GenerateConstraintChecks(Parse *, Table *, int *, int, int, int,
 				     int, u8, u8, int, int *, int *);
-void sqlite3CompleteInsertion(Parse *, Table *, int, int *, int, u8);
+/**
+ * This routine generates code to finish the INSERT or UPDATE
+ * operation that was started by a prior call to
+ * sqlite3GenerateConstraintChecks.
+ * @param v Virtual database engine.
+ * @param cursor_id Primary index cursor.
+ * @param tuple_id Register with data to insert.
+ * @param use_seek_result True to set the USESEEKRESULT flag on
+ *        OP_[Idx]Insert.
+ * @param on_error Error action on failed insert/replace.
+ */
+void
+vdbe_emit_complete_insertion(Vdbe *v, int cursor_id, int tuple_id,
+			     int use_seek_result, u8 on_error);
+
 int sqlite3OpenTableAndIndices(Parse *, Table *, int, u8, int, u8 *, int *,
 			       int *, u8, u8);
 void sqlite3BeginWriteOperation(Parse *, int);

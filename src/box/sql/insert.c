@@ -736,7 +736,7 @@ sqlite3Insert(Parse * pParse,	/* Parser context */
 		 * with the first column.
 		 */
 		for (i = 0; i < pTab->nCol; i++) {
-			int iRegStore = regTupleid + 1 + i;
+			int iRegStore = regData + i;
 			if (pColumn == 0) {
 				j = i;
 			} else {
@@ -854,8 +854,8 @@ sqlite3Insert(Parse * pParse,	/* Parser context */
 					      ((user_session->sql_flags &
 						SQLITE_ForeignKeys) == 0 ||
 					       sqlite3FkReferences(pTab) == 0));
-		sqlite3CompleteInsertion(pParse, pTab, iIdxCur, aRegIdx,
-					 bUseSeek, onError);
+		vdbe_emit_complete_insertion(v, iIdxCur, aRegIdx[0], bUseSeek,
+					     onError);
 	}
 
 	/* Update the count of rows that are inserted
@@ -1475,69 +1475,27 @@ sqlite3GenerateConstraintChecks(Parse * pParse,		/* The parser context */
 	VdbeModuleComment((v, "END: GenCnstCks(%d)", seenReplace));
 }
 
-/*
- * This routine generates code to finish the INSERT or UPDATE operation
- * that was started by a prior call to sqlite3GenerateConstraintChecks.
- * A consecutive range of registers starting at regNewData contains the
- * tupleid and the content to be inserted.
- *
- * The arguments to this routine should be the same as corresponding
- * arguments to sqlite3GenerateConstraintChecks.
- */
 void
-sqlite3CompleteInsertion(Parse * pParse,	/* The parser context */
-			 Table * pTab,		/* the table into which we are inserting */
-			 int iIdxCur,		/* Primary index cursor */
-			 int *aRegIdx,		/* Register used by each index.  0 for unused indices */
-			 int useSeekResult,	/* True to set the USESEEKRESULT flag on OP_[Idx]Insert */
-			 u8 onError)
+vdbe_emit_complete_insertion(Vdbe *v, int cursor_id, int tuple_id,
+			     int use_seek_result, u8 on_error)
 {
-	Vdbe *v;		/* Prepared statements under construction */
-	Index *pIdx;		/* An index being inserted or updated */
-	u16 pik_flags;		/* flag values passed to the btree insert */
-	int opcode;
-
-	v = sqlite3GetVdbe(pParse);
-	assert(v != 0);
-	/* This table is not a VIEW */
-	assert(!space_is_view(pTab));
-	/*
-	 * The for loop which purpose in sqlite was to insert new
-	 * values to all indexes is replaced to inserting new
-	 * values only to pk in tarantool.
-	 */
-	pIdx = pTab->pIndex;
-	/* Each table have pk on top of the indexes list */
-	assert(IsPrimaryKeyIndex(pIdx));
-	/* Partial indexes should be implemented somewhere in tarantool
-	 * codebase to check it during inserting values to the pk #2626
-	 *
-	 */
-	/*if( pIdx->pPartIdxWhere ){
-	 *  sqlite3VdbeAddOp2(v, OP_IsNull, aRegIdx[i], sqlite3VdbeCurrentAddr(v)+2);
-	 *  VdbeCoverage(v);
-	 *}
-	 */
-	pik_flags = OPFLAG_NCHANGE;
-	if (useSeekResult) {
+	assert(v != NULL);
+	u16 pik_flags = OPFLAG_NCHANGE;
+	if (use_seek_result)
 		pik_flags |= OPFLAG_USESEEKRESULT;
-	}
-	assert(pParse->nested == 0);
 
-	if (onError == ON_CONFLICT_ACTION_REPLACE) {
+	int opcode;
+	if (on_error == ON_CONFLICT_ACTION_REPLACE)
 		opcode = OP_IdxReplace;
-	} else {
+	else
 		opcode = OP_IdxInsert;
-	}
 
-	if (onError == ON_CONFLICT_ACTION_IGNORE) {
+	if (on_error == ON_CONFLICT_ACTION_IGNORE)
 		pik_flags |= OPFLAG_OE_IGNORE;
-	} else if (onError == ON_CONFLICT_ACTION_FAIL) {
+	else if (on_error == ON_CONFLICT_ACTION_FAIL)
 		pik_flags |= OPFLAG_OE_FAIL;
-	}
 
-	sqlite3VdbeAddOp4Int(v, opcode, iIdxCur, aRegIdx[0],
-			     aRegIdx[0] + 1, index_column_count(pIdx));
+	sqlite3VdbeAddOp2(v, opcode, cursor_id, tuple_id);
 	sqlite3VdbeChangeP5(v, pik_flags);
 }
 
