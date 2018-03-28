@@ -422,7 +422,7 @@ sqlite3Insert(Parse * pParse,	/* Parser context */
 		goto insert_cleanup;
 	if (pParse->nested == 0)
 		sqlite3VdbeCountChanges(v);
-	sqlite3BeginWriteOperation(pParse, pSelect || pTrigger);
+	sql_set_multi_write(pParse, pSelect || pTrigger);
 
 #ifndef SQLITE_OMIT_XFER_OPT
 	/* If the statement is of the form
@@ -1398,8 +1398,7 @@ sqlite3GenerateConstraintChecks(Parse * pParse,		/* The parser context */
 			if (pIdx != pPk) {
 				for (i = 0; i < nPkCol; i++) {
 					assert(pPk->aiColumn[i] >= 0);
-					x = sqlite3ColumnOfIndex(pIdx,
-								 pPk->aiColumn[i]);
+					x = pPk->aiColumn[i];
 					sqlite3VdbeAddOp3(v, OP_Column,
 							  iThisCur, x, regR + i);
 					VdbeComment((v, "%s.%s", pTab->zName,
@@ -1462,7 +1461,7 @@ sqlite3GenerateConstraintChecks(Parse * pParse,		/* The parser context */
 		default: {
 				Trigger *pTrigger = 0;
 				assert(onError == ON_CONFLICT_ACTION_REPLACE);
-				sqlite3MultiWrite(pParse);
+				sql_set_multi_write(pParse, 1);
 				if (user_session->
 				    sql_flags & SQLITE_RecTriggers) {
 					pTrigger =
@@ -1833,7 +1832,7 @@ xferOptimization(Parse * pParse,	/* Parser context */
 	 * we have to check the semantics.
 	 */
 	pItem = pSelect->pSrc->a;
-	pSrc = sqlite3LocateTableItem(pParse, 0, pItem);
+	pSrc = sqlite3LocateTable(pParse, 0, pItem->zName);
 	if (pSrc == 0) {
 		return 0;	/* FROM clause does not contain a real table */
 	}
@@ -1919,7 +1918,6 @@ xferOptimization(Parse * pParse,	/* Parser context */
 	sqlite3_xferopt_count++;
 #endif
 	v = sqlite3GetVdbe(pParse);
-	sqlite3CodeVerifySchema(pParse);
 	iSrc = pParse->nTab++;
 	iDest = pParse->nTab++;
 	regData = sqlite3GetTempReg(pParse);

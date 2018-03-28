@@ -4745,7 +4745,7 @@ selectExpander(Walker * pWalker, Select * p)
 			/* An ordinary table or view name in the FROM clause */
 			assert(pFrom->pTab == 0);
 			pFrom->pTab = pTab =
-			    sqlite3LocateTableItem(pParse, 0, pFrom);
+			    sqlite3LocateTable(pParse, 0, pFrom->zName);
 			if (pTab == 0)
 				return WRC_Abort;
 			if (pTab->nTabRef >= 0xffff) {
@@ -6154,8 +6154,6 @@ sqlite3Select(Parse * pParse,		/* The parser context */
 				KeyInfo *pKeyInfo = 0;	/* Keyinfo for scanned index */
 				Index *pBest;	/* Best index found so far */
 				int iRoot = pTab->tnum;	/* Root page of scanned b-tree */
-
-				sqlite3CodeVerifySchema(pParse);
 
 				/* Search for the index that has the lowest scan cost.
 				 *
