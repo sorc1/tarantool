@@ -552,19 +552,23 @@ sql_execute(sqlite3 *db, struct sqlite3_stmt *stmt, int column_count,
 {
 	int rc;
 	if (column_count > 0) {
-		/* Either ROW or DONE or ERROR. */
-		while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-			if (sql_row_to_port(stmt, column_count, region,
+		/* Either ROW or TUPLE or DONE or ERROR. */
+		while (true) {
+			rc = sqlite3_step(stmt);
+			if (rc == SQLITE_ROW) {
+				if (sql_row_to_port(stmt, column_count, region,
 					    port) != 0)
-				return -1;
+					return -1;
+			} else if (rc != SQLITE_TUPLE) {
+				break;
+			}
 		}
 		assert(rc == SQLITE_DONE || rc != SQLITE_OK);
 	} else {
-		/* No rows. Either DONE or ERROR. */
-		rc = sqlite3_step(stmt);
+		while ((rc = sqlite3_step(stmt)) == SQLITE_TUPLE);
 		assert(rc != SQLITE_ROW && rc != SQLITE_OK);
 	}
-	if (rc != SQLITE_DONE) {
+	if (rc != SQLITE_DONE && rc != SQLITE_TUPLE) {
 		diag_set(ClientError, ER_SQL_EXECUTE, sqlite3_errmsg(db));
 		return -1;
 	}

@@ -956,6 +956,9 @@ sqlite3ErrName(int rc)
 		case SQLITE_ROW:
 			zName = "SQLITE_ROW";
 			break;
+		case SQLITE_TUPLE:
+			zName = "SQLITE_TUPLE";
+			break;
 		case SQLITE_WARNING:
 			zName = "SQLITE_WARNING";
 			break;

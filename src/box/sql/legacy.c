@@ -94,6 +94,7 @@ sqlite3_exec(sqlite3 * db,	/* The database on which the SQL executes */
 			rc = sqlite3_step(pStmt);
 			/* Invoke the callback function if required */
 			if (xCallback && (SQLITE_ROW == rc ||
+					  SQLITE_TUPLE == rc ||
 					  (SQLITE_DONE == rc && !callbackIsInit
 					   && user_session->
 					   sql_flags & SQLITE_NullCallback))) {
@@ -149,7 +150,7 @@ sqlite3_exec(sqlite3 * db,	/* The database on which the SQL executes */
 				}
 			}
 
-			if (rc != SQLITE_ROW) {
+			if (rc != SQLITE_ROW && rc != SQLITE_TUPLE) {
 				rc = sqlite3VdbeFinalize((Vdbe *) pStmt);
 				pStmt = 0;
 				zSql = zLeftover;

@@ -1497,6 +1497,7 @@ vdbe_emit_complete_insertion(Vdbe *v, int cursor_id, int tuple_id,
 
 	sqlite3VdbeAddOp2(v, opcode, cursor_id, tuple_id);
 	sqlite3VdbeChangeP5(v, pik_flags);
+	sqlite3VdbeAddOp1(v, OP_ResultTuple, cursor_id);
 }
 
 /*

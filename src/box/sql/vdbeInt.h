@@ -409,7 +409,17 @@ struct Vdbe {
 	Mem *aMem;		/* The memory locations */
 	Mem **apArg;		/* Arguments to currently executing user function */
 	Mem *aColName;		/* Column names to return */
-	Mem *pResultSet;	/* Pointer to an array of results */
+	union {
+		/**
+		 * Pointer to an array of results for SQLITE_ROW.
+		 */
+		Mem *pResultSet;
+		/**
+		 * Result tuple, returned by an iterator for
+		 * SQLITE_ROW.
+		 */
+		struct tuple *result_tuple;
+	};
 	char *zErrMsg;		/* Error message written here */
 	VdbeCursor **apCsr;	/* One element of this array for each open cursor */
 	Mem *aVar;		/* Values for the OP_Variable opcode. */

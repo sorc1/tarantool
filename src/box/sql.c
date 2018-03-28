@@ -464,7 +464,11 @@ insertOrReplace(BtCursor *pCur, enum iproto_type type)
 	request.space_id = pCur->space->def->id;
 	request.type = type;
 	mp_tuple_assert(request.tuple, request.tuple_end);
-	int rc = box_process_rw(&request, pCur->space, NULL);
+	if (pCur->last_tuple != NULL)
+		tuple_unref(pCur->last_tuple);
+	int rc = box_process_rw(&request, pCur->space, &pCur->last_tuple);
+	if (pCur->last_tuple != NULL)
+		tuple_ref(pCur->last_tuple);
 	return rc == 0 ? SQLITE_OK : SQL_TARANTOOL_INSERT_FAIL;
 }
 

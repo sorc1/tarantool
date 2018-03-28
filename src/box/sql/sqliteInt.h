@@ -452,6 +452,8 @@ enum sql_ret_code {
 	SQLITE_ROW,
 	/** sqlite3_step() has finished executing. */
 	SQLITE_DONE,
+	/** sqlite3_step() has a ready tuple. */
+	SQLITE_TUPLE,
 };
 
 void *
@@ -594,8 +596,23 @@ sqlite3_prepare_v2(sqlite3 * db,	/* Database handle */
 		   const char **pzTail	/* OUT: Pointer to unused portion of zSql */
 	);
 
+struct tuple *
+sqlite3_result_tuple(sqlite3_stmt *stmt);
+
+/**
+ * Execute one step of VDBE execution.
+ * @param stmt Virtual database engine program.
+ *
+ * @retval SQLITE_ROW On of rows of DQL request, or meta of DML -
+ *         'rows deleted', 'rows inserted' and etc. Result can be
+ *         accessed by columns using sqlite3_column_...().
+ * @retval SQLITE_TUPLE Inserted or updated tuple on DML.
+ * @retval SQLITE_ERROR Vdbe is terminated by an error.
+ * @retval SQLITE_DONE Vdbe successfully finished execution, and
+ *         can be finalized.
+ */
 int
-sqlite3_step(sqlite3_stmt *);
+sqlite3_step(sqlite3_stmt *stmt);
 
 const void *
 sqlite3_column_blob(sqlite3_stmt *, int iCol);

@@ -589,7 +589,7 @@ sqlite3Step(Vdbe * p)
 
 #ifndef SQLITE_OMIT_TRACE
 	/* If the statement completed successfully, invoke the profile callback */
-	if (rc != SQLITE_ROW)
+	if (rc != SQLITE_ROW && rc != SQLITE_TUPLE)
 		checkProfileCallback(db, p);
 #endif
 
@@ -605,9 +605,11 @@ sqlite3Step(Vdbe * p)
 	 * contains the value that would be returned if sqlite3_finalize()
 	 * were called on statement p.
 	 */
-	assert(rc == SQLITE_ROW || rc == SQLITE_DONE || rc == SQLITE_ERROR
-	       || (rc & 0xff) == SQLITE_BUSY || rc == SQLITE_MISUSE);
-	if (p->isPrepareV2 && rc != SQLITE_ROW && rc != SQLITE_DONE) {
+	assert(rc == SQLITE_ROW || rc == SQLITE_DONE || rc == SQLITE_ERROR ||
+	       rc == SQLITE_TUPLE || (rc & 0xff) == SQLITE_BUSY ||
+	       rc == SQLITE_MISUSE);
+	if (p->isPrepareV2 && rc != SQLITE_ROW && rc != SQLITE_DONE &&
+	    rc != SQLITE_TUPLE) {
 		/* If this statement was prepared using sqlite3_prepare_v2(), and an
 		 * error has occurred, then return the error code in p->rc to the
 		 * caller. Set the error code in the database handle to the same value.
@@ -617,11 +619,13 @@ sqlite3Step(Vdbe * p)
 	return (rc & db->errMask);
 }
 
-/*
- * This is the top-level implementation of sqlite3_step().  Call
- * sqlite3Step() to do most of the work.  If a schema error occurs,
- * call sqlite3Reprepare() and try again.
- */
+struct tuple *
+sqlite3_result_tuple(sqlite3_stmt *stmt)
+{
+	Vdbe *v = (Vdbe *) stmt;
+	return v->result_tuple;
+}
+
 int
 sqlite3_step(sqlite3_stmt * pStmt)
 {

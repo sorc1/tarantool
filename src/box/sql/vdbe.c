@@ -1384,6 +1384,25 @@ case OP_IntCopy: {            /* out2 */
 	break;
 }
 
+/* Opcode: ResultTuple P1 * * * *
+ * Synopsis: output=tuple(cursor(P1))
+ *
+ * The register P1 is a cursor, from which a last tuple is
+ * returned. Sqlite3_step returns SQLITE_TUPLE.
+ */
+case OP_ResultTuple: {
+	VdbeCursor *cursor = p->apCsr[pOp->p1];
+	assert(cursor != NULL);
+	assert(cursor->eCurType == CURTYPE_TARANTOOL);
+	if (cursor->uc.pCursor->last_tuple != NULL) {
+		p->result_tuple = cursor->uc.pCursor->last_tuple;
+		p->pc = (int)(pOp - aOp) + 1;
+		rc = SQLITE_TUPLE;
+		goto vdbe_return;
+	}
+	break;
+}
+
 /* Opcode: ResultRow P1 P2 * * *
  * Synopsis: output=r[P1@P2]
  *
@@ -4439,6 +4458,7 @@ case OP_SInsert: {
 	assert(space_is_system(space));
 	/* Create surrogate cursor to pass to SQL bindings. */
 	BtCursor surrogate_cur;
+	memset(&surrogate_cur, 0, sizeof(surrogate_cur));
 	surrogate_cur.space = space;
 	surrogate_cur.key = pIn2->z;
 	surrogate_cur.nKey = pIn2->n;
