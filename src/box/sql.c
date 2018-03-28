@@ -442,6 +442,7 @@ int tarantoolSqlite3EphemeralCreate(BtCursor *pCur, uint32_t field_count,
 		index_def_new(0 /*space id */, 0 /* index id */, "ephemer_idx",
 			      strlen("ephemer_idx"), TREE, &index_opts_default,
 			      ephemer_key_def, NULL /* pk def */);
+	key_def_delete(ephemer_key_def);
 
 	struct rlist key_list;
 	rlist_create(&key_list);
