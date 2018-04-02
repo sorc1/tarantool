@@ -207,7 +207,7 @@ format[3] = {name = 'field3', type = 'map'}
 format[4] = {name = 'field4', type = 'string'}
 s = box.schema.space.create('test', {format = format})
 pk = s:create_index('pk')
-field2 = {1, 2, 3, "4", {5,6,7}, {key="key1", value="value1"}}
+field2 = {1, 2, 3, "4", {5,6,7}, {key="key1", value="value1", hello中国world = {中国 = 'test'}}}
 field3 = {[10] = 100, k1 = 100, k2 = {1,2,3}, k3 = { {a=1, b=2}, {c=3, d=4} }, [-1] = 200}
 t = s:replace{1, field2, field3, "123456"}
 t[1]
@@ -223,9 +223,12 @@ t["[2][5][2]"]
 t["[2][5][3]"]
 t["[2][6].key"]
 t["[2][6].value"]
+t["[2][6].hello中国world"]
 t["[2][6]['key']"]
 t["[2][6]['value']"]
+t["[2][6]['hello中国world']"]
 t["[3].k3[2].c"]
+t["[2][6]['hello中国world'].中国"]
 t["[4]"]
 t.field1
 t.field2[5]

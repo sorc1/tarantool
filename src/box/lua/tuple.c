@@ -413,7 +413,6 @@ lbox_tuple_transform(struct lua_State *L)
 static inline int
 tuple_field_go_to_index(const char **field, uint64_t index)
 {
-	assert(index >= 0);
 	enum mp_type type = mp_typeof(**field);
 	if (type == MP_ARRAY) {
 		if (index == 0)
@@ -497,7 +496,9 @@ tuple_field_go_to_key(const char **field, const char *key, int len)
 static int
 lbox_tuple_field_by_path(struct lua_State *L)
 {
+	int mark = 0;
 	const char *field;
+	const char *path = NULL;
 	struct tuple *tuple = luaT_istuple(L, 1);
 	/* Is checked in Lua wrapper. */
 	assert(tuple != NULL);
@@ -506,6 +507,17 @@ lbox_tuple_field_by_path(struct lua_State *L)
 		index -= TUPLE_INDEX_BASE;
 		if (index < 0) {
 not_found:
+		if (!path)
+			goto exit_not_found;
+		uint32_t path_len = strlen(path);
+		uint32_t path_hash = lua_hash(path, path_len);
+		field = tuple_field_by_name(tuple, path,
+		                            path_len, path_hash);
+		if (field)
+			goto push_value;
+		if (mark || path_len == 0)
+			luaL_error(L, "Error in path on position %d", mark);
+exit_not_found:
 			lua_pushinteger(L, -1);
 			lua_pushnil(L);
 			return 2;
@@ -520,13 +532,15 @@ push_value:
 	}
 	assert(lua_isstring(L, 2));
 	size_t path_len;
-	const char *path = lua_tolstring(L, 2, &path_len);
+	path = lua_tolstring(L, 2, &path_len);
 	struct json_path_parser parser;
 	struct json_path_node node;
 	json_path_parser_create(&parser, path, path_len);
 	int rc = json_path_next(&parser, &node);
-	if (rc != 0 || node.type == JSON_PATH_END)
-		luaL_error(L, "Error in path on position %d", rc);
+	if (rc != 0 || node.type == JSON_PATH_END) {
+		mark = rc;
+		goto not_found;
+	}
 	if (node.type == JSON_PATH_NUM) {
 		int index = node.num;
 		if (index == 0)
@@ -553,8 +567,10 @@ push_value:
 			name_hash = lua_hash(name, name_len);
 		}
 		field = tuple_field_by_name(tuple, name, name_len, name_hash);
-		if (field == NULL)
+		if (field == NULL) {
+			rc = 1;
 			goto not_found;
+		}
 	}
 	while ((rc = json_path_next(&parser, &node)) == 0 &&
 	       node.type != JSON_PATH_END) {

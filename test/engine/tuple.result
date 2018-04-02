@@ -611,7 +611,7 @@ s = box.schema.space.create('test', {format = format})
 pk = s:create_index('pk')
 ---
 ...
-field2 = {1, 2, 3, "4", {5,6,7}, {key="key1", value="value1"}}
+field2 = {1, 2, 3, "4", {5,6,7}, {key="key1", value="value1", hello中国world = {中国 = 'test'}}}
 ---
 ...
 field3 = {[10] = 100, k1 = 100, k2 = {1,2,3}, k3 = { {a=1, b=2}, {c=3, d=4} }, [-1] = 200}
@@ -626,7 +626,7 @@ t[1]
 ...
 t[2]
 ---
-- [1, 2, 3, '4', [5, 6, 7], {'key': 'key1', 'value': 'value1'}]
+- [1, 2, 3, '4', [5, 6, 7], {'hello中国world': {'中国': 'test'}, 'key': 'key1', 'value': 'value1'}]
 ...
 t[3]
 ---
@@ -673,6 +673,10 @@ t["[2][6].value"]
 ---
 - value1
 ...
+t["[2][6].hello中国world"]
+---
+- {'中国': 'test'}
+...
 t["[2][6]['key']"]
 ---
 - key1
@@ -681,9 +685,17 @@ t["[2][6]['value']"]
 ---
 - value1
 ...
+t["[2][6]['hello中国world']"]
+---
+- {'中国': 'test'}
+...
 t["[3].k3[2].c"]
 ---
 - 3
+...
+t["[2][6]['hello中国world'].中国"]
+---
+- test
 ...
 t["[4]"]
 ---
