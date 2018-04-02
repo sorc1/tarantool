@@ -32,11 +32,13 @@
 #include "box/lua/tuple.h"
 #include "lua/utils.h"
 #include "lua/trigger.h"
+#include "box/schema.h"
 
 extern "C" {
 	#include <lua.h>
 	#include <lauxlib.h>
 	#include <lualib.h>
+	#include <trivia/util.h>
 } /* extern "C" */
 
 #include "box/space.h"
@@ -172,6 +174,16 @@ lbox_fillspace(struct lua_State *L, struct space *space, int i)
 	/* space.engine */
 	lua_pushstring(L, "engine");
 	lua_pushstring(L, space->def->engine_name);
+	lua_settable(L, i);
+
+	/* space._schema_version */
+	lua_pushstring(L, "_schema_version");
+	luaL_pushuint64(L, box_schema_version());
+	lua_settable(L, i);
+
+	/* space._cptr */
+	lua_pushstring(L, "_cptr");
+	lua_pushlightuserdata(L, space);
 	lua_settable(L, i);
 
 	lua_pushstring(L, "enabled");
@@ -386,6 +398,100 @@ static struct trigger on_alter_space_in_lua = {
 	RLIST_LINK_INITIALIZER, box_lua_space_new_or_delete, NULL, NULL
 };
 
+/**
+ * Get a C pointer for space structure.
+ * Caches the result. Cleans the user(negative) stack itself.
+ * @param Lua space object at top of the Lua stack.
+ * @retval C structure pointer.
+ */
+static int
+lbox_space_ptr_cached(struct lua_State *L)
+{
+	if (lua_gettop(L) < 1 || !lua_istable(L, 1))
+		luaL_error(L, "Usage: space:_cptr()");
+
+	lua_getfield(L, 1, "_schema_version");
+	uint64_t schema_version = luaL_touint64(L, -1);
+	lua_pop(L, 1);
+	uint64_t global_shema_version = box_schema_version();
+
+	void *space = NULL;
+	if (schema_version == global_shema_version) {
+		lua_getfield(L, 1, "_cptr");
+		space = (void *)lua_topointer(L, -1);
+	} else {
+		lua_getfield(L, 1, "id");
+		uint32_t id = luaL_touint64(L, -1);
+		space = space_by_id(id);
+		if (!space)
+			luaL_error(L, "Specified space is not exists");
+
+		/** update the cache */
+		luaL_pushuint64(L, global_shema_version);
+		lua_setfield(L, 1, "_schema_version");
+		lua_pushlightuserdata(L, space);
+		lua_setfield(L, 1, "_cptr");
+	}
+	lua_pop(L, 1);
+	lua_pushlightuserdata(L, space);
+	return 1;
+}
+
+/**
+ * Make a tuple or a table Lua object by map.
+ * @param Lua space object.
+ * @param Lua map table object.
+ * @param Lua opts table object (optional).
+ * @retval C structure pointer.
+ */
+static int
+lbox_space_frommap(struct lua_State *L)
+{
+	struct tuple_dictionary *dict = NULL;
+	struct space *space = NULL;
+	int argc = lua_gettop(L);
+	bool table = false;
+	if (argc < 2 || argc > 3 || !lua_istable(L, 2))
+		goto error;
+	if (argc == 3) {
+		if (!lua_istable(L, 3))
+			goto error;
+		lua_getfield(L, 3, "table");
+		if (!lua_isboolean(L, -1) && !lua_isnil(L, -1))
+			goto error;
+		table = lua_toboolean(L, -1);
+	}
+
+	lbox_space_ptr_cached(L);
+	space = (struct space *)lua_topointer(L, -1);
+	dict = space->format->dict;
+	lua_createtable(L, space->def->field_count, 0);
+
+	lua_pushnil(L);
+	while (lua_next(L, 2) != 0) {
+		uint32_t fieldno;
+		size_t key_len;
+		const char *key = lua_tolstring(L, -2, &key_len);
+		uint32_t key_hash = lua_hashstring(L, -2);
+		if (tuple_fieldno_by_name(dict, key, key_len, key_hash, &fieldno)) {
+			const char *err_msg = tt_sprintf("Unknown field '%s'", key);
+			lua_pushnil(L);
+			lua_pushstring(L, err_msg);
+			return 2;
+		}
+		lua_rawseti(L, -3, fieldno+1);
+	}
+	if (table)
+		return 1;
+
+	lua_replace(L, 1);
+	lua_settop(L, 1);
+	return lbox_tuple_new(L);
+error:
+	luaL_error(L, "Usage: space:frommap(map, opts)");
+	return 1;
+}
+
 void
 box_lua_space_init(struct lua_State *L)
 {
@@ -464,4 +570,12 @@ box_lua_space_init(struct lua_State *L)
 	lua_pushnumber(L, VCLOCK_MAX);
 	lua_setfield(L, -2, "REPLICA_MAX");
 	lua_pop(L, 2); /* box, schema */
+
+	static const struct luaL_Reg space_internal_lib[] = {
+		{"frommap", lbox_space_frommap},
+		{"_cptr", lbox_space_ptr_cached},
+		{NULL, NULL}
+	};
+	luaL_register(L, "box.internal.space", space_internal_lib);
+	lua_pop(L, 1);
 }
