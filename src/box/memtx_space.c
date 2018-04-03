@@ -736,6 +736,8 @@ memtx_space_drop_primary_key(struct space *space)
 {
 	struct memtx_space *memtx_space = (struct memtx_space *)space;
 	memtx_space->replace = memtx_space_replace_no_keys;
+	memtx_space->bsize = 0;
+	memtx_space->version++;
 }
 
 static void
@@ -844,6 +846,8 @@ memtx_space_prepare_alter(struct space *old_space, struct space *new_space)
 	struct memtx_space *old_memtx_space = (struct memtx_space *)old_space;
 	struct memtx_space *new_memtx_space = (struct memtx_space *)new_space;
 	new_memtx_space->replace = old_memtx_space->replace;
+	new_memtx_space->bsize = old_memtx_space->bsize;
+	new_memtx_space->version = old_memtx_space->version;
 	bool is_empty = old_space->index_count == 0 ||
 			index_size(old_space->index[0]) == 0;
 	return space_def_check_compatibility(old_space->def,
@@ -855,17 +859,10 @@ memtx_space_commit_alter(struct space *old_space, struct space *new_space)
 {
 	struct memtx_space *old_memtx_space = (struct memtx_space *)old_space;
 	struct memtx_space *new_memtx_space = (struct memtx_space *)new_space;
-	bool is_empty = new_space->index_count == 0 ||
-			index_size(new_space->index[0]) == 0;
 
-	/*
-	 * Delete all tuples when the last index is dropped
-	 * or the space is truncated.
-	 */
-	if (is_empty)
+	/* Delete all tuples if the primary index was dropped. */
+	if (old_memtx_space->version != new_memtx_space->version)
 		memtx_space_prune(old_space);
-	else
-		new_memtx_space->bsize = old_memtx_space->bsize;
 }
 
 /* }}} DDL */
@@ -937,6 +934,7 @@ memtx_space_new(struct memtx_engine *memtx,
 	tuple_format_unref(format);
 
 	memtx_space->bsize = 0;
+	memtx_space->version = 0;
 	memtx_space->replace = memtx_space_replace_no_keys;
 	return (struct space *)memtx_space;
 }

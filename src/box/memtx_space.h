@@ -43,6 +43,12 @@ struct memtx_space {
 	/* Number of bytes used in memory by tuples in the space. */
 	size_t bsize;
 	/**
+	 * Version of data stored in the space. It is bumped every
+	 * time the primary index is dropped. We use it to detect
+	 * if we need to delete tuples when the space is altered.
+	 */
+	int version;
+	/**
 	 * A pointer to replace function, set to different values
 	 * at different stages of recovery.
 	 */
