@@ -2207,25 +2207,34 @@ sqliteViewResetAll(sqlite3 * db)
 #endif				/* SQLITE_OMIT_VIEW */
 
 /*
- * Remove entries from the sqlite_statN tables (for N in (1,2,3))
+ * Remove entries from the _sql_statN tables (for N in (1, 4))
  * after a DROP INDEX or DROP TABLE command.
  */
 static void
-sqlite3ClearStatTables(Parse * pParse,	/* The parsing context */
-		       const char *zType,	/* "idx" or "tbl" */
-		       const char *zName	/* Name of index or table */
+sql_clear_stat_tables(Parse * pParse,	/* The parsing context */
+		       const char *zType,	    /* "idx" or "tbl" */
+               const char *table_name,  /* Name of the table*/
+		       const char *idx_name	/* Name of the index*/
     )
 {
-	int i;
-	for (i = 1; i <= 4; i++) {
-		char zTab[24];
-		sqlite3_snprintf(sizeof(zTab), zTab, "_sql_stat%d", i);
-		if (sqlite3FindTable(pParse->db, zTab)) {
-			sqlite3NestedParse(pParse,
-					   "DELETE FROM \"%s\" WHERE \"%s\"=%Q",
-					   zTab, zType, zName);
-		}
-	}
+    int i, j;
+    if(strcmp(zType, "idx") == 0)
+        for(i = 1, j = 1; i <= 2; i++, j++) {
+            char zTab[24];
+            sqlite3_snprintf(sizeof(zTab), zTab, "_sql_stat%d", i * j);
+            sqlite3NestedParse(pParse,
+                        "DELETE FROM \"%s\" WHERE (\"idx\"=%Q AND "
+                        "\"tbl\"=%Q)",
+                        zTab, idx_name, table_name);
+        }
+    else
+        for(i = 1, j = 1; i <= 2; i++, j++) {
+            char zTab[24];
+            sqlite3_snprintf(sizeof(zTab), zTab, "_sql_stat%d", i * j);
+            sqlite3NestedParse(pParse,
+                        "DELETE FROM \"%s\" WHERE \"tbl\"=%Q",
+                        zTab, table_name);
+        }
 }
 
 /*
@@ -2415,7 +2424,7 @@ sqlite3DropTable(Parse * pParse, SrcList * pName, int isView, int noErr)
 	 */
 
 	sqlite3BeginWriteOperation(pParse, 1);
-	sqlite3ClearStatTables(pParse, "tbl", pTab->zName);
+    sql_clear_stat_tables(pParse, "tbl", pTab->zName, NULL);
 	sqlite3FkDropTable(pParse, pName, pTab);
 	sqlite3CodeDropTable(pParse, pTab, isView);
 
@@ -3417,7 +3426,7 @@ sqlite3DropIndex(Parse * pParse, SrcList * pName, Token * pName2, int ifExists)
 	 * But firstly, delete statistics since schema
 	 * changes after DDL.
 	 */
-	sqlite3ClearStatTables(pParse, "idx", pIndex->zName);
+    sql_clear_stat_tables(pParse, "idx", pIndex->pTable->zName, pIndex->zName);
 	int record_reg = ++pParse->nMem;
 	int space_id_reg = ++pParse->nMem;
 	sqlite3VdbeAddOp2(v, OP_Integer, SQLITE_PAGENO_TO_SPACEID(pIndex->tnum),
