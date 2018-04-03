@@ -1074,10 +1074,6 @@ end
 
 internal.check_iterator_type = check_iterator_type -- export for net.box
 
-local function forbid_new_index(t, k, v)
-    return error('Attempt to modify a read-only table')
-end
-
 local base_index_mt = {}
 base_index_mt.__index = base_index_mt
 --
@@ -1098,6 +1094,7 @@ setmetatable(base_index_mt, {
         rawset(t, k, v)
     end
 })
+
 -- __len and __index
 base_index_mt.len = function(index)
     check_index_arg(index, 'len')
@@ -1118,7 +1115,6 @@ base_index_mt.bsize = function(index)
 end
 -- Lua 5.2 compatibility
 base_index_mt.__len = base_index_mt.len
-base_index_mt.__newindex = forbid_new_index
 -- min and max
 base_index_mt.min_ffi = function(index, key)
     check_index_arg(index, 'min')
@@ -1345,7 +1341,6 @@ space_mt.bsize = function(space)
     end
     return builtin.space_bsize(s)
 end
-space_mt.__newindex = forbid_new_index
 
 space_mt.get = function(space, key)
     check_space_arg(space, 'get')
@@ -1440,13 +1435,17 @@ space_mt.run_triggers = function(space, yesno)
 end
 space_mt.__index = space_mt
 
+box.schema.index_mt = base_index_mt
+box.schema.memtx_index_mt = memtx_index_mt
+box.schema.vinyl_index_mt = vinyl_index_mt
+box.schema.space_mt = space_mt
+
 function box.schema.space.bless(space)
-    local space_mt = table.deepcopy(space_mt)
     local index_mt
     if space.engine == 'vinyl' then
-        index_mt = table.deepcopy(vinyl_index_mt)
+        index_mt = vinyl_index_mt
     else
-        index_mt = table.deepcopy(memtx_index_mt)
+        index_mt = memtx_index_mt
     end
 
     setmetatable(space, space_mt)
