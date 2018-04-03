@@ -361,6 +361,72 @@ static int l_load(lua_State *L) {
    return loader.document_count;
 }
 
+/**
+ * Decode a global tag of document. Multiple tags can not be
+ * decoded. In a case of multiple documents only first is
+ * processed.
+ * @param YAML document in string.
+ * @retval nil, err Error occured during decoding. In the second
+ *         value is error description.
+ * @retval nil, nil A document does not contain tags.
+ * @retval handle, prefix Handle and prefix of a tag.
+ */
+static int
+l_load_tag(struct lua_State *L)
+{
+   if (lua_gettop(L) != 1 || !lua_isstring(L, 1))
+      return luaL_error(L, "Usage: decode_tag(<string>)");
+   size_t len;
+   const char *str = lua_tolstring(L, 1, &len);
+   struct lua_yaml_loader loader;
+   memset(&loader, 0, sizeof(loader));
+   loader.L = L;
+   loader.cfg = luaL_checkserializer(L);
+   if (yaml_parser_initialize(&loader.parser) == 0)
+      luaL_error(L, OOM_ERRMSG);
+   yaml_tag_directive_t *start, *end;
+   yaml_parser_set_input_string(&loader.parser, (const unsigned char *) str,
+                                len);
+   /* Initial parser step. Detect the documents start position. */
+   if (do_parse(&loader) == 0)
+      goto parse_error;
+   if (loader.event.type != YAML_STREAM_START_EVENT) {
+      lua_pushnil(L);
+      lua_pushstring(L, "expected STREAM_START_EVENT");
+      return 2;
+   }
+   /* Parse a document start. */
+   if (do_parse(&loader) == 0)
+      goto parse_error;
+   if (loader.event.type == YAML_STREAM_END_EVENT)
+      goto no_tags;
+   assert(loader.event.type == YAML_DOCUMENT_START_EVENT);
+   start = loader.event.data.document_start.tag_directives.start;
+   end = loader.event.data.document_start.tag_directives.end;
+   if (start == end)
+      goto no_tags;
+   if (end - start > 1) {
+      lua_pushnil(L);
+      lua_pushstring(L, "can not decode multiple tags");
+      return 2;
+   }
+   lua_pushstring(L, (const char *) start->handle);
+   lua_pushstring(L, (const char *) start->prefix);
+   delete_event(&loader);
+   yaml_parser_delete(&loader.parser);
+   return 2;
+
+parse_error:
+   lua_pushnil(L);
+   /* Make nil be before an error message. */
+   lua_insert(L, -2);
+   return 2;
+
+no_tags:
+   lua_pushnil(L);
+   return 1;
+}
+
 static int dump_node(struct lua_yaml_dumper *dumper);
 
 static yaml_char_t *get_yaml_anchor(struct lua_yaml_dumper *dumper) {
@@ -751,6 +817,7 @@ static const luaL_Reg yamllib[] = {
    { "encode", l_dump },
    { "encode_tagged", l_dump_tagged },
    { "decode", l_load },
+   { "decode_tag", l_load_tag },
    { "new",    l_new },
    { NULL, NULL}
 };
